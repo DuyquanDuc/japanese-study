@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JLPT N2 Study</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Home Screen -->
+  <div id="screen-home" class="screen active">
+    <h1 class="app-title">JLPT N2 Study</h1>
+    <p class="app-subtitle">漢字 &amp; 文法 Quiz</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <h2>漢字 Kanji</h2>
+        <p>380 N2 kanji</p>
+        <div class="card-buttons">
+          <button data-mode="kanji-meaning">Kanji → Meaning</button>
+          <button data-mode="kanji-reading">Kanji → Reading</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>文法 Grammar</h2>
+        <p>195 N2 grammar points</p>
+        <div class="card-buttons">
+          <button data-mode="grammar-meaning">Grammar → Meaning</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="quiz-length-selector">
+      <label>Questions:</label>
+      <button class="length-btn active" data-length="10">10</button>
+      <button class="length-btn" data-length="20">20</button>
+      <button class="length-btn" data-length="all">All</button>
+    </div>
+  </div>
+
+  <!-- Quiz Screen -->
+  <div id="screen-quiz" class="screen">
+    <div class="quiz-header">
+      <button id="btn-quit" class="btn-back">✕ Quit</button>
+      <div class="score-display">
+        <span id="score-correct">0</span> / <span id="score-total">0</span>
+      </div>
+    </div>
+    <div class="quiz-prompt" id="quiz-prompt"></div>
+    <div class="answer-grid" id="answer-grid">
+      <button class="answer-btn" data-index="0"></button>
+      <button class="answer-btn" data-index="1"></button>
+      <button class="answer-btn" data-index="2"></button>
+      <button class="answer-btn" data-index="3"></button>
+    </div>
+    <div class="quiz-hint" id="quiz-hint"></div>
+    <div id="explanation" class="explanation hidden"></div>
+    <button id="btn-next" class="btn-next hidden">Next →</button>
+  </div>
+
+  <!-- Results Screen -->
+  <div id="screen-results" class="screen">
+    <h2>Results</h2>
+    <div class="results-score" id="results-score"></div>
+    <div class="results-missed" id="results-missed"></div>
+    <div class="results-buttons">
+      <button id="btn-retry">Try Again</button>
+      <button id="btn-menu">Back to Menu</button>
+    </div>
+  </div>
+
+  <script src="js/data/kanji-n2.js"></script>
+  <script src="js/data/kanji-examples.js"></script>
+  <script src="js/data/grammar-n2.js"></script>
+  <script src="js/data/grammar-examples.js"></script>
+  <script src="js/data/grammar-examples-2.js"></script>
+  <script src="js/quiz.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
