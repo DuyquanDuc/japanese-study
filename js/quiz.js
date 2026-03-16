@@ -3,6 +3,7 @@
  */
 const Quiz = (() => {
   let pool = [];
+  let fullPool = [];
   let mode = '';
   let questions = [];
   let currentIndex = 0;
@@ -48,7 +49,7 @@ const Quiz = (() => {
   }
 
   function buildQuestion(correctItem) {
-    const distractors = pickRandom(pool, 3, correctItem);
+    const distractors = pickRandom(fullPool, 3, correctItem);
     const options = shuffle([
       { text: getCorrectAnswer(correctItem), correct: true },
       ...distractors.map(d => ({ text: getDistractorText(d), correct: false }))
@@ -61,17 +62,19 @@ const Quiz = (() => {
     };
   }
 
-  function init(quizMode, length) {
+  function init(quizMode, length, customPool) {
     mode = quizMode;
     score = 0;
     currentIndex = 0;
     missed = [];
 
     if (mode === 'kanji-meaning' || mode === 'kanji-reading') {
-      pool = KANJI_N2;
+      fullPool = KANJI_N2;
     } else {
-      pool = GRAMMAR_N2;
+      fullPool = GRAMMAR_N2;
     }
+
+    pool = customPool || fullPool;
 
     const shuffled = shuffle(pool);
     const count = length === 'all' ? shuffled.length : Math.min(length, shuffled.length);
@@ -92,7 +95,7 @@ const Quiz = (() => {
     } else {
       missed.push(q);
     }
-    return { isCorrect, correctIndex: q.options.findIndex(o => o.correct) };
+    return { isCorrect, correctIndex: q.options.findIndex(o => o.correct), item: q.item };
   }
 
   function next() {

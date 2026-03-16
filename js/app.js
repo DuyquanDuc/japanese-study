@@ -25,6 +25,7 @@
   let selectedLength = 10;
   let lastMode = '';
   let answered = false;
+  let isReviewMode = false;
 
   // Screen navigation
   function showScreen(name) {
@@ -50,8 +51,8 @@
     });
   });
 
-  function startQuiz(mode, length) {
-    Quiz.init(mode, length);
+  function startQuiz(mode, length, customPool) {
+    Quiz.init(mode, length, customPool);
     showScreen('quiz');
     renderQuestion();
   }
@@ -97,6 +98,12 @@
     answered = true;
 
     const result = Quiz.answer(index);
+
+    // Record progress
+    const type = Progress.getType(Quiz.getMode());
+    const key = type === 'kanji' ? result.item.kanji : result.item.japanese;
+    Progress.recordAnswer(type, key, result.isCorrect);
+
     answerBtns.forEach(b => b.classList.add('answered'));
     answerBtns[index].classList.add(result.isCorrect ? 'correct' : 'incorrect');
     if (!result.isCorrect) {
@@ -184,7 +191,10 @@
   });
 
   // Quit
-  btnQuit.addEventListener('click', () => showScreen('home'));
+  btnQuit.addEventListener('click', () => {
+    showScreen('home');
+    renderProgress();
+  });
 
   // Results
   function showResults() {
@@ -211,6 +221,78 @@
   }
 
   // Retry & Menu
-  btnRetry.addEventListener('click', () => startQuiz(lastMode, selectedLength));
-  btnMenu.addEventListener('click', () => showScreen('home'));
+  btnRetry.addEventListener('click', () => {
+    if (isReviewMode) {
+      startReviewQuiz(lastMode);
+    } else {
+      startQuiz(lastMode, selectedLength);
+    }
+  });
+  btnMenu.addEventListener('click', () => {
+    showScreen('home');
+    renderProgress();
+  });
+
+  // Progress rendering
+  function renderProgress() {
+    ['kanji', 'grammar'].forEach(type => {
+      const stats = Progress.getStats(type);
+      const bar = document.getElementById(`progress-bar-${type}`);
+      const text = document.getElementById(`progress-text-${type}`);
+      if (bar && text) {
+        const pct = stats.total > 0 ? (stats.learned / stats.total) * 100 : 0;
+        bar.style.width = pct + '%';
+        text.textContent = `${stats.learned} / ${stats.total} learned`;
+      }
+    });
+  }
+
+  // Review mode
+  function startReviewQuiz(mode) {
+    const type = Progress.getType(mode);
+    const weakKeys = Progress.getWeakItems(type);
+    const unseenKeys = Progress.getUnseenItems(type);
+    const reviewKeys = new Set([...weakKeys, ...unseenKeys]);
+
+    const dataset = type === 'kanji' ? KANJI_N2 : GRAMMAR_N2;
+    const keyProp = type === 'kanji' ? 'kanji' : 'japanese';
+    const customPool = dataset.filter(item => reviewKeys.has(item[keyProp]));
+
+    if (customPool.length === 0) {
+      alert('All items learned! Nothing to review.');
+      return;
+    }
+
+    isReviewMode = true;
+    lastMode = mode;
+    startQuiz(mode, selectedLength, customPool);
+  }
+
+  // Review button listeners
+  document.querySelectorAll('[data-review]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      startReviewQuiz(btn.dataset.review);
+    });
+  });
+
+  // Regular quiz buttons should clear review mode
+  document.querySelectorAll('[data-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      isReviewMode = false;
+    });
+  });
+
+  // Reset button
+  const btnReset = document.getElementById('btn-reset');
+  if (btnReset) {
+    btnReset.addEventListener('click', () => {
+      if (confirm('Reset all progress? This cannot be undone.')) {
+        Progress.reset();
+        renderProgress();
+      }
+    });
+  }
+
+  // Initial render
+  renderProgress();
 })();

@@ -19,16 +19,26 @@
       <div class="card">
         <h2>漢字 Kanji</h2>
         <p>380 N2 kanji</p>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" id="progress-bar-kanji"></div>
+        </div>
+        <p class="progress-text" id="progress-text-kanji">0 / 380 learned</p>
         <div class="card-buttons">
           <button data-mode="kanji-meaning">Kanji → Meaning</button>
           <button data-mode="kanji-reading">Kanji → Reading</button>
+          <button class="review-btn" data-review="kanji-meaning">Review Weak</button>
         </div>
       </div>
       <div class="card">
         <h2>文法 Grammar</h2>
         <p>195 N2 grammar points</p>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" id="progress-bar-grammar"></div>
+        </div>
+        <p class="progress-text" id="progress-text-grammar">0 / 195 learned</p>
         <div class="card-buttons">
           <button data-mode="grammar-meaning">Grammar → Meaning</button>
+          <button class="review-btn" data-review="grammar-meaning">Review Weak</button>
         </div>
       </div>
     </div>
@@ -39,6 +49,8 @@
       <button class="length-btn" data-length="20">20</button>
       <button class="length-btn" data-length="all">All</button>
     </div>
+
+    <button id="btn-reset" class="reset-btn">Reset Progress</button>
   </div>
 
   <!-- Quiz Screen -->
@@ -77,6 +89,7 @@
   <script src="js/data/grammar-n2.js"></script>
   <script src="js/data/grammar-examples.js"></script>
   <script src="js/data/grammar-examples-2.js"></script>
+  <script src="js/progress.js"></script>
   <script src="js/quiz.js"></script>
   <script src="js/app.js"></script>
 </body>
