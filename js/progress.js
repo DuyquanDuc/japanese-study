@@ -92,20 +92,19 @@ const Progress = (() => {
     const store = cache[type] || {};
     const allKeys = getAllKeys(type);
     const total = allKeys.length;
-    let learned = 0;
+    let studied = 0;
     let weak = 0;
 
     allKeys.forEach(key => {
       const entry = store[key];
       if (!entry) return;
-      if (entry.correct >= LEARNED_THRESHOLD) {
-        learned++;
-      } else {
+      studied++;
+      if (entry.incorrect > 0 && entry.correct < LEARNED_THRESHOLD) {
         weak++;
       }
     });
 
-    return { total, learned, weak, unseen: total - learned - weak };
+    return { total, studied, weak, unseen: total - studied };
   }
 
   async function getWeakItems(type) {
@@ -114,7 +113,7 @@ const Progress = (() => {
     const allKeys = getAllKeys(type);
     return allKeys.filter(key => {
       const entry = store[key];
-      return entry && entry.correct < LEARNED_THRESHOLD;
+      return entry && entry.incorrect > 0 && entry.correct < LEARNED_THRESHOLD;
     });
   }
 

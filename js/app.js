@@ -126,13 +126,25 @@
     });
   });
 
-  // --- Start quiz ---
+  // --- Start quiz (unseen items only) ---
   document.querySelectorAll('[data-mode]').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       isReviewMode = false;
       isSRSMode = false;
       lastMode = btn.dataset.mode;
-      startQuiz(lastMode, selectedLength);
+
+      const type = Progress.getType(lastMode);
+      const unseenKeys = await Progress.getUnseenItems(type);
+
+      if (unseenKeys.length === 0) {
+        showToast('All items studied! Use Review Weak or SRS Review.');
+        return;
+      }
+
+      const dataset = type === 'kanji' ? KANJI_N2 : GRAMMAR_N2;
+      const keyProp = type === 'kanji' ? 'kanji' : 'japanese';
+      const pool = dataset.filter(item => unseenKeys.includes(item[keyProp]));
+      startQuiz(lastMode, selectedLength, pool);
     });
   });
 
@@ -334,9 +346,9 @@
         const bar = document.getElementById(`progress-bar-${type}`);
         const text = document.getElementById(`progress-text-${type}`);
         if (bar && text) {
-          const pct = stats.total > 0 ? (stats.learned / stats.total) * 100 : 0;
+          const pct = stats.total > 0 ? (stats.studied / stats.total) * 100 : 0;
           bar.style.width = pct + '%';
-          text.textContent = `${stats.learned} / ${stats.total} learned`;
+          text.textContent = `${stats.studied} / ${stats.total} studied`;
         }
       } catch {
         // non-critical
@@ -344,22 +356,18 @@
     }
   }
 
-  // Review mode (weak + unseen)
+  // Review mode (only wrongly answered items)
   async function startReviewQuiz(mode) {
     const type = Progress.getType(mode);
     try {
-      const [weakKeys, unseenKeys] = await Promise.all([
-        Progress.getWeakItems(type),
-        Progress.getUnseenItems(type)
-      ]);
-      const reviewKeys = new Set([...weakKeys, ...unseenKeys]);
+      const weakKeys = await Progress.getWeakItems(type);
 
       const dataset = type === 'kanji' ? KANJI_N2 : GRAMMAR_N2;
       const keyProp = type === 'kanji' ? 'kanji' : 'japanese';
-      const customPool = dataset.filter(item => reviewKeys.has(item[keyProp]));
+      const customPool = dataset.filter(item => weakKeys.includes(item[keyProp]));
 
       if (customPool.length === 0) {
-        showToast('All items learned! Nothing to review.');
+        showToast('No weak items to review!');
         return;
       }
 
