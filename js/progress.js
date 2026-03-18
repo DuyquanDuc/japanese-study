@@ -1,11 +1,19 @@
 /**
  * Progress persistence — Firestore-backed with in-memory cache and SRS integration.
+ * Types are level-qualified: "n2-kanji", "n1-grammar", etc.
  */
 const Progress = (() => {
   const LEARNED_THRESHOLD = 2;
-  let cache = { kanji: {}, grammar: {} };
+  const ALL_TYPES = ['n1-kanji', 'n1-grammar', 'n2-kanji', 'n2-grammar', 'n3-kanji', 'n3-grammar'];
+  let cache = {};
   let profile = null;
   let loaded = false;
+
+  function initCache() {
+    cache = {};
+    ALL_TYPES.forEach(t => { cache[t] = {}; });
+  }
+  initCache();
 
   function userDoc() {
     return window.db.collection('users').doc(Auth.getUid());
@@ -15,19 +23,53 @@ const Progress = (() => {
     return userDoc().collection('progress').doc(type);
   }
 
+  async function migrateOldData() {
+    // Migrate old "kanji" → "n2-kanji" and "grammar" → "n2-grammar"
+    const [oldKanjiSnap, oldGrammarSnap] = await Promise.all([
+      progressDoc('kanji').get(),
+      progressDoc('grammar').get()
+    ]);
+
+    const migrations = [];
+    if (oldKanjiSnap.exists && oldKanjiSnap.data().items && Object.keys(oldKanjiSnap.data().items).length > 0) {
+      cache['n2-kanji'] = oldKanjiSnap.data().items;
+      migrations.push(
+        progressDoc('n2-kanji').set({ items: cache['n2-kanji'] }, { merge: true }),
+        progressDoc('kanji').delete()
+      );
+    }
+    if (oldGrammarSnap.exists && oldGrammarSnap.data().items && Object.keys(oldGrammarSnap.data().items).length > 0) {
+      cache['n2-grammar'] = oldGrammarSnap.data().items;
+      migrations.push(
+        progressDoc('n2-grammar').set({ items: cache['n2-grammar'] }, { merge: true }),
+        progressDoc('grammar').delete()
+      );
+    }
+    if (migrations.length > 0) {
+      await Promise.all(migrations);
+    }
+  }
+
   async function loadAll() {
     if (loaded) return;
     const uid = Auth.getUid();
     if (!uid) return;
 
-    const [kanjiSnap, grammarSnap, profileSnap] = await Promise.all([
-      progressDoc('kanji').get(),
-      progressDoc('grammar').get(),
-      userDoc().get()
-    ]);
+    // Try migration first
+    await migrateOldData();
 
-    cache.kanji = (kanjiSnap.exists && kanjiSnap.data().items) || {};
-    cache.grammar = (grammarSnap.exists && grammarSnap.data().items) || {};
+    // Load all level-qualified progress docs + profile
+    const promises = ALL_TYPES.map(t => progressDoc(t).get());
+    promises.push(userDoc().get());
+
+    const results = await Promise.all(promises);
+    const profileSnap = results[results.length - 1];
+
+    ALL_TYPES.forEach((t, i) => {
+      const snap = results[i];
+      cache[t] = (snap.exists && snap.data().items) || {};
+    });
+
     profile = profileSnap.exists ? profileSnap.data() : defaultProfile();
     loaded = true;
   }
@@ -49,17 +91,18 @@ const Progress = (() => {
   }
 
   function clearCache() {
-    cache = { kanji: {}, grammar: {} };
+    initCache();
     profile = null;
     loaded = false;
   }
 
   function getType(mode) {
-    return mode.startsWith('kanji') ? 'kanji' : 'grammar';
+    return getProgressType(mode);
   }
 
   async function recordAnswer(type, key, isCorrect) {
     await loadAll();
+    if (!cache[type]) cache[type] = {};
     if (!cache[type][key]) {
       cache[type][key] = { correct: 0, incorrect: 0, lastSeen: 0, ...SRS.defaultItem() };
     }
@@ -83,8 +126,14 @@ const Progress = (() => {
   }
 
   function getAllKeys(type) {
-    if (type === 'kanji') return KANJI_N2.map(k => k.kanji);
-    return GRAMMAR_N2.map(g => g.japanese);
+    // type is "n2-kanji", "n1-grammar", etc.
+    const parts = type.split('-');
+    const level = parts[0];
+    const kind = parts[1];
+    const reg = DATA_REGISTRY[level];
+    if (!reg || !reg[kind]) return [];
+    const entry = reg[kind];
+    return entry.data().map(item => item[entry.keyProp]);
   }
 
   async function getStats(type) {
@@ -165,18 +214,20 @@ const Progress = (() => {
   }
 
   async function reset() {
-    cache = { kanji: {}, grammar: {} };
+    initCache();
     profile = defaultProfile();
     loaded = true;
-    await Promise.all([
-      progressDoc('kanji').set({ items: {} }),
-      progressDoc('grammar').set({ items: {} }),
-      userDoc().set(profile)
-    ]);
+    const promises = ALL_TYPES.map(t => progressDoc(t).set({ items: {} }));
+    promises.push(userDoc().set(profile));
+    // Also clean up old format docs if they exist
+    promises.push(progressDoc('kanji').delete().catch(() => {}));
+    promises.push(progressDoc('grammar').delete().catch(() => {}));
+    await Promise.all(promises);
   }
 
   return {
     recordAnswer, getStats, getWeakItems, getUnseenItems, getType,
-    getDueItems, updateStats, getProfile, reset, loadAll, clearCache
+    getDueItems, updateStats, getProfile, reset, loadAll, clearCache,
+    ALL_TYPES
   };
 })();

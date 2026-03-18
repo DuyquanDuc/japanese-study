@@ -365,5 +365,22 @@ const KANJI_EXAMPLES = {
   "曇": [{ word: "曇り", reading: "くもり", meaning: "cloudy" }, { word: "曇る", reading: "くもる", meaning: "to become cloudy" }],
   "肯": [{ word: "肯定", reading: "こうてい", meaning: "affirmation" }],
   "燥": [{ word: "乾燥", reading: "かんそう", meaning: "dryness" }],
-  "零": [{ word: "零", reading: "れい", meaning: "zero" }, { word: "零下", reading: "れいか", meaning: "below zero" }]
+  "零": [{ word: "零", reading: "れい", meaning: "zero" }, { word: "零下", reading: "れいか", meaning: "below zero" }],
+  "阪": [{ word: "大阪", reading: "おおさか", meaning: "Osaka" }, { word: "阪神", reading: "はんしん", meaning: "Osaka-Kobe area" }],
+  "韓": [{ word: "韓国", reading: "かんこく", meaning: "South Korea" }, { word: "韓国語", reading: "かんこくご", meaning: "Korean language" }],
+  "則": [{ word: "規則", reading: "きそく", meaning: "rule" }, { word: "法則", reading: "ほうそく", meaning: "law; principle" }],
+  "欧": [{ word: "欧米", reading: "おうべい", meaning: "Europe and America" }, { word: "欧州", reading: "おうしゅう", meaning: "Europe" }],
+  "斬": [{ word: "斬新", reading: "ざんしん", meaning: "novel; original" }, { word: "斬る", reading: "きる", meaning: "to slay" }],
+  "昇": [{ word: "上昇", reading: "じょうしょう", meaning: "rise; ascent" }, { word: "昇進", reading: "しょうしん", meaning: "promotion" }],
+  "狙": [{ word: "狙う", reading: "ねらう", meaning: "to aim at" }, { word: "狙い", reading: "ねらい", meaning: "aim; target" }],
+  "脇": [{ word: "脇役", reading: "わきやく", meaning: "supporting role" }, { word: "脇道", reading: "わきみち", meaning: "side road" }],
+  "拝": [{ word: "拝見", reading: "はいけん", meaning: "seeing (humble)" }, { word: "参拝", reading: "さんぱい", meaning: "worship; visit" }],
+  "坊": [{ word: "坊さん", reading: "ぼうさん", meaning: "Buddhist monk" }, { word: "赤ん坊", reading: "あかんぼう", meaning: "baby" }],
+  "尻": [{ word: "尻尾", reading: "しっぽ", meaning: "tail" }, { word: "尻", reading: "しり", meaning: "buttocks" }],
+  "闇": [{ word: "暗闇", reading: "くらやみ", meaning: "darkness" }, { word: "闇市", reading: "やみいち", meaning: "black market" }],
+  "膝": [{ word: "膝", reading: "ひざ", meaning: "knee" }, { word: "膝頭", reading: "ひざがしら", meaning: "kneecap" }],
+  "軒": [{ word: "一軒家", reading: "いっけんや", meaning: "detached house" }, { word: "軒先", reading: "のきさき", meaning: "eaves" }],
+  "雇": [{ word: "雇用", reading: "こよう", meaning: "employment" }, { word: "解雇", reading: "かいこ", meaning: "dismissal" }],
+  "隅": [{ word: "片隅", reading: "かたすみ", meaning: "corner" }, { word: "隅々", reading: "すみずみ", meaning: "every corner" }],
+  "召": [{ word: "召集", reading: "しょうしゅう", meaning: "summons" }, { word: "召し上がる", reading: "めしあがる", meaning: "to eat (honorific)" }]
 };

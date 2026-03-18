@@ -116,6 +116,17 @@
     }
   }
 
+  // --- Level tabs ---
+  document.querySelectorAll('.level-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.level-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const level = tab.dataset.level;
+      document.querySelectorAll('.level-panel').forEach(p => p.classList.remove('active'));
+      document.getElementById(`panel-${level}`).classList.add('active');
+    });
+  });
+
   // --- Quiz length selector ---
   document.querySelectorAll('.length-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -141,9 +152,8 @@
         return;
       }
 
-      const dataset = type === 'kanji' ? KANJI_N2 : GRAMMAR_N2;
-      const keyProp = type === 'kanji' ? 'kanji' : 'japanese';
-      const pool = dataset.filter(item => unseenKeys.includes(item[keyProp]));
+      const entry = getRegistryEntry(lastMode);
+      const pool = entry.data().filter(item => unseenKeys.includes(item[entry.keyProp]));
       startQuiz(lastMode, selectedLength, pool);
     });
   });
@@ -168,7 +178,8 @@
     explanation.classList.add('hidden');
     hint.textContent = `${Quiz.getCurrentNumber()} / ${Quiz.getTotal()}`;
 
-    const isKanji = Quiz.getMode().startsWith('kanji');
+    const { type } = parseMode(Quiz.getMode());
+    const isKanji = type === 'kanji';
     prompt.className = 'quiz-prompt ' + (isKanji ? 'kanji-prompt' : 'grammar-prompt');
     prompt.textContent = q.prompt;
 
@@ -186,8 +197,10 @@
     answered = true;
 
     const result = Quiz.answer(index);
-    const type = Progress.getType(Quiz.getMode());
-    const key = type === 'kanji' ? result.item.kanji : result.item.japanese;
+    const mode = Quiz.getMode();
+    const entry = getRegistryEntry(mode);
+    const type = Progress.getType(mode);
+    const key = result.item[entry.keyProp];
 
     if (result.isCorrect) sessionCorrect++;
     else sessionIncorrect++;
@@ -214,15 +227,17 @@
 
   function showExplanation(item) {
     const mode = Quiz.getMode();
+    const { type } = parseMode(mode);
+    const entry = getRegistryEntry(mode);
     let html = '<h3>Explanation</h3>';
 
-    if (mode.startsWith('kanji')) {
+    if (type === 'kanji') {
       html += `<div class="explain-row"><span class="explain-label">Kanji</span><span class="explain-value" style="font-size:1.5rem;font-weight:700">${item.kanji}</span></div>`;
       html += `<div class="explain-row"><span class="explain-label">Meanings</span><span class="explain-value">${item.meanings.join('; ')}</span></div>`;
       if (item.onyomi) html += `<div class="explain-row"><span class="explain-label">On'yomi</span><span class="explain-value">${item.onyomi}</span></div>`;
       if (item.kunyomi) html += `<div class="explain-row"><span class="explain-label">Kun'yomi</span><span class="explain-value">${item.kunyomi}</span></div>`;
 
-      const examples = KANJI_EXAMPLES[item.kanji];
+      const examples = entry.examples(item.kanji);
       if (examples && examples.length > 0) {
         html += '<div class="explain-examples"><h4>Example Words</h4>';
         examples.forEach(ex => {
@@ -239,7 +254,7 @@
       html += `<div class="explain-row"><span class="explain-label">Romaji</span><span class="explain-value">${item.romaji}</span></div>`;
       html += `<div class="explain-row"><span class="explain-label">Meaning</span><span class="explain-value">${item.english}</span></div>`;
 
-      const gExamples = GRAMMAR_EXAMPLES[item.japanese] || GRAMMAR_EXAMPLES_2[item.japanese];
+      const gExamples = entry.examples(item.japanese);
       if (gExamples && gExamples.length > 0) {
         html += '<div class="explain-examples"><h4>Example Sentences</h4>';
         gExamples.forEach(ex => {
@@ -340,7 +355,7 @@
 
   // Progress rendering
   async function renderProgress() {
-    for (const type of ['kanji', 'grammar']) {
+    for (const type of Progress.ALL_TYPES) {
       try {
         const stats = await Progress.getStats(type);
         const bar = document.getElementById(`progress-bar-${type}`);
@@ -361,10 +376,8 @@
     const type = Progress.getType(mode);
     try {
       const weakKeys = await Progress.getWeakItems(type);
-
-      const dataset = type === 'kanji' ? KANJI_N2 : GRAMMAR_N2;
-      const keyProp = type === 'kanji' ? 'kanji' : 'japanese';
-      const customPool = dataset.filter(item => weakKeys.includes(item[keyProp]));
+      const entry = getRegistryEntry(mode);
+      const customPool = entry.data().filter(item => weakKeys.includes(item[entry.keyProp]));
 
       if (customPool.length === 0) {
         showToast('No weak items to review!');
@@ -385,10 +398,8 @@
     const type = Progress.getType(mode);
     try {
       const dueKeys = await Progress.getDueItems(type);
-
-      const dataset = type === 'kanji' ? KANJI_N2 : GRAMMAR_N2;
-      const keyProp = type === 'kanji' ? 'kanji' : 'japanese';
-      const customPool = dataset.filter(item => dueKeys.includes(item[keyProp]));
+      const entry = getRegistryEntry(mode);
+      const customPool = entry.data().filter(item => dueKeys.includes(item[entry.keyProp]));
 
       if (customPool.length === 0) {
         showToast('No items due for review!');

@@ -1,5 +1,6 @@
 /**
  * Quiz engine — generates questions, tracks score, manages state.
+ * Uses DATA_REGISTRY for pool selection and answer generation.
  */
 const Quiz = (() => {
   let pool = [];
@@ -25,17 +26,17 @@ const Quiz = (() => {
   }
 
   function getPrompt(item) {
-    if (mode === 'kanji-meaning' || mode === 'kanji-reading') {
-      return item.kanji;
-    }
+    const { type } = parseMode(mode);
+    if (type === 'kanji') return item.kanji;
     return item.japanese;
   }
 
   function getCorrectAnswer(item) {
-    if (mode === 'kanji-meaning') {
+    const { type, quiz } = parseMode(mode);
+    if (type === 'kanji' && quiz === 'meaning') {
       return item.meanings.join('; ');
     }
-    if (mode === 'kanji-reading') {
+    if (type === 'kanji' && quiz === 'reading') {
       const parts = [];
       if (item.onyomi) parts.push(item.onyomi);
       if (item.kunyomi) parts.push(item.kunyomi);
@@ -68,11 +69,8 @@ const Quiz = (() => {
     currentIndex = 0;
     missed = [];
 
-    if (mode === 'kanji-meaning' || mode === 'kanji-reading') {
-      fullPool = KANJI_N2;
-    } else {
-      fullPool = GRAMMAR_N2;
-    }
+    const entry = getRegistryEntry(mode);
+    fullPool = entry ? entry.data() : [];
 
     pool = customPool || fullPool;
 

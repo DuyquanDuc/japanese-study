@@ -644,6 +644,47 @@ body {
   color: var(--incorrect);
 }
 
+/* Level tabs */
+.level-tabs {
+  display: flex;
+  gap: 0;
+  width: 100%;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.level-tab {
+  flex: 1;
+  background: var(--surface);
+  color: var(--text-dim);
+  border: none;
+  padding: 12px 0;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.level-tab:hover {
+  color: var(--text);
+}
+
+.level-tab.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.level-panel {
+  display: none;
+  width: 100%;
+}
+
+.level-panel.active {
+  display: block;
+}
+
 @media (max-width: 480px) {
   .quiz-prompt.kanji-prompt {
     font-size: 90px;
