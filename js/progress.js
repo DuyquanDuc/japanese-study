@@ -1,38 +1,85 @@
 /**
- * Progress persistence — tracks learned/weak/unseen items via localStorage.
+ * Progress persistence — Firestore-backed with in-memory cache and SRS integration.
  */
 const Progress = (() => {
-  const STORAGE_KEY = 'jlpt-progress';
   const LEARNED_THRESHOLD = 2;
+  let cache = { kanji: {}, grammar: {} };
+  let profile = null;
+  let loaded = false;
 
-  function load() {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { kanji: {}, grammar: {} };
-    } catch {
-      return { kanji: {}, grammar: {} };
-    }
+  function userDoc() {
+    return window.db.collection('users').doc(Auth.getUid());
   }
 
-  function save(data) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  function progressDoc(type) {
+    return userDoc().collection('progress').doc(type);
+  }
+
+  async function loadAll() {
+    if (loaded) return;
+    const uid = Auth.getUid();
+    if (!uid) return;
+
+    const [kanjiSnap, grammarSnap, profileSnap] = await Promise.all([
+      progressDoc('kanji').get(),
+      progressDoc('grammar').get(),
+      userDoc().get()
+    ]);
+
+    cache.kanji = (kanjiSnap.exists && kanjiSnap.data().items) || {};
+    cache.grammar = (grammarSnap.exists && grammarSnap.data().items) || {};
+    profile = profileSnap.exists ? profileSnap.data() : defaultProfile();
+    loaded = true;
+  }
+
+  function defaultProfile() {
+    const user = Auth.getUser();
+    return {
+      displayName: user ? user.displayName : '',
+      email: user ? user.email : '',
+      photoURL: user ? user.photoURL : '',
+      createdAt: Date.now(),
+      lastStudyDate: null,
+      currentStreak: 0,
+      longestStreak: 0,
+      totalSessions: 0,
+      totalCorrect: 0,
+      totalIncorrect: 0
+    };
+  }
+
+  function clearCache() {
+    cache = { kanji: {}, grammar: {} };
+    profile = null;
+    loaded = false;
   }
 
   function getType(mode) {
     return mode.startsWith('kanji') ? 'kanji' : 'grammar';
   }
 
-  function recordAnswer(type, key, isCorrect) {
-    const data = load();
-    if (!data[type]) data[type] = {};
-    if (!data[type][key]) data[type][key] = { correct: 0, incorrect: 0, lastSeen: 0 };
-    const entry = data[type][key];
+  async function recordAnswer(type, key, isCorrect) {
+    await loadAll();
+    if (!cache[type][key]) {
+      cache[type][key] = { correct: 0, incorrect: 0, lastSeen: 0, ...SRS.defaultItem() };
+    }
+    const entry = cache[type][key];
     if (isCorrect) {
       entry.correct++;
     } else {
       entry.incorrect++;
     }
     entry.lastSeen = Date.now();
-    save(data);
+
+    // SRS update
+    const srsResult = SRS.calculate(entry, isCorrect);
+    entry.interval = srsResult.interval;
+    entry.easeFactor = srsResult.easeFactor;
+    entry.nextReview = srsResult.nextReview;
+    entry.repetitions = srsResult.repetitions;
+
+    // Write-through to Firestore
+    progressDoc(type).set({ items: cache[type] }, { merge: true });
   }
 
   function getAllKeys(type) {
@@ -40,9 +87,9 @@ const Progress = (() => {
     return GRAMMAR_N2.map(g => g.japanese);
   }
 
-  function getStats(type) {
-    const data = load();
-    const store = data[type] || {};
+  async function getStats(type) {
+    await loadAll();
+    const store = cache[type] || {};
     const allKeys = getAllKeys(type);
     const total = allKeys.length;
     let learned = 0;
@@ -61,16 +108,9 @@ const Progress = (() => {
     return { total, learned, weak, unseen: total - learned - weak };
   }
 
-  function getItemStatus(type, key) {
-    const data = load();
-    const entry = (data[type] || {})[key];
-    if (!entry) return 'unseen';
-    return entry.correct >= LEARNED_THRESHOLD ? 'learned' : 'weak';
-  }
-
-  function getWeakItems(type) {
-    const data = load();
-    const store = data[type] || {};
+  async function getWeakItems(type) {
+    await loadAll();
+    const store = cache[type] || {};
     const allKeys = getAllKeys(type);
     return allKeys.filter(key => {
       const entry = store[key];
@@ -78,16 +118,66 @@ const Progress = (() => {
     });
   }
 
-  function getUnseenItems(type) {
-    const data = load();
-    const store = data[type] || {};
+  async function getUnseenItems(type) {
+    await loadAll();
+    const store = cache[type] || {};
     const allKeys = getAllKeys(type);
     return allKeys.filter(key => !store[key]);
   }
 
-  function reset() {
-    localStorage.removeItem(STORAGE_KEY);
+  async function getDueItems(type) {
+    await loadAll();
+    const store = cache[type] || {};
+    const allKeys = getAllKeys(type);
+    return allKeys.filter(key => {
+      const entry = store[key];
+      if (!entry) return true; // unseen items are due
+      return SRS.isDue(entry);
+    });
   }
 
-  return { recordAnswer, getStats, getItemStatus, getWeakItems, getUnseenItems, getType, reset };
+  async function updateStats(correct, incorrect) {
+    await loadAll();
+    if (!profile) profile = defaultProfile();
+
+    profile.totalCorrect += correct;
+    profile.totalIncorrect += incorrect;
+    profile.totalSessions++;
+
+    // Streak logic
+    const today = new Date().toISOString().slice(0, 10);
+    if (profile.lastStudyDate !== today) {
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      if (profile.lastStudyDate === yesterday) {
+        profile.currentStreak++;
+      } else {
+        profile.currentStreak = 1;
+      }
+      profile.lastStudyDate = today;
+    }
+    profile.longestStreak = Math.max(profile.longestStreak, profile.currentStreak);
+
+    userDoc().set(profile, { merge: true });
+  }
+
+  async function getProfile() {
+    await loadAll();
+    return profile || defaultProfile();
+  }
+
+  async function reset() {
+    cache = { kanji: {}, grammar: {} };
+    profile = defaultProfile();
+    loaded = true;
+    await Promise.all([
+      progressDoc('kanji').set({ items: {} }),
+      progressDoc('grammar').set({ items: {} }),
+      userDoc().set(profile)
+    ]);
+  }
+
+  return {
+    recordAnswer, getStats, getWeakItems, getUnseenItems, getType,
+    getDueItems, updateStats, getProfile, reset, loadAll, clearCache
+  };
 })();

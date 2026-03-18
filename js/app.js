@@ -1,8 +1,10 @@
 /**
  * App shell — screen navigation, event listeners, rendering.
+ * Gated on Firebase Auth; all Progress calls are async.
  */
 (() => {
   const screens = {
+    login: document.getElementById('screen-login'),
     home: document.getElementById('screen-home'),
     quiz: document.getElementById('screen-quiz'),
     results: document.getElementById('screen-results')
@@ -21,19 +23,98 @@
   const explanation = document.getElementById('explanation');
   const resultsScore = document.getElementById('results-score');
   const resultsMissed = document.getElementById('results-missed');
+  const loadingOverlay = document.getElementById('loading-overlay');
+  const toast = document.getElementById('toast');
 
   let selectedLength = 10;
   let lastMode = '';
   let answered = false;
   let isReviewMode = false;
+  let isSRSMode = false;
+  let sessionCorrect = 0;
+  let sessionIncorrect = 0;
 
-  // Screen navigation
+  // --- Utilities ---
   function showScreen(name) {
     Object.values(screens).forEach(s => s.classList.remove('active'));
     screens[name].classList.add('active');
   }
 
-  // Quiz length selector
+  function showLoading() { loadingOverlay.classList.remove('hidden'); }
+  function hideLoading() { loadingOverlay.classList.add('hidden'); }
+
+  function showToast(msg, duration) {
+    toast.textContent = msg;
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), duration || 3000);
+  }
+
+  // --- Auth ---
+  const btnSignIn = document.getElementById('btn-google-signin');
+  const btnSignOut = document.getElementById('btn-signout');
+  const loginSpinner = document.getElementById('login-spinner');
+  const loginError = document.getElementById('login-error');
+
+  btnSignIn.addEventListener('click', async () => {
+    loginSpinner.classList.remove('hidden');
+    loginError.classList.add('hidden');
+    try {
+      await Auth.signIn();
+    } catch (err) {
+      loginError.textContent = 'Sign-in failed. Please try again.';
+      loginError.classList.remove('hidden');
+      loginSpinner.classList.add('hidden');
+    }
+  });
+
+  btnSignOut.addEventListener('click', async () => {
+    Progress.clearCache();
+    await Auth.signOut();
+    showScreen('login');
+  });
+
+  Auth.onReady(async (user) => {
+    if (user) {
+      showLoading();
+      try {
+        await Progress.loadAll();
+        populateUserBar(user);
+        await renderStats();
+        await renderProgress();
+        showScreen('home');
+      } catch (err) {
+        showToast('Failed to load data. Please refresh.');
+      } finally {
+        hideLoading();
+      }
+    } else {
+      showScreen('login');
+    }
+  });
+
+  function populateUserBar(user) {
+    const avatar = document.getElementById('user-avatar');
+    const name = document.getElementById('user-name');
+    avatar.src = user.photoURL || '';
+    avatar.style.display = user.photoURL ? 'block' : 'none';
+    name.textContent = user.displayName || user.email || '';
+  }
+
+  // --- Stats ---
+  async function renderStats() {
+    try {
+      const p = await Progress.getProfile();
+      document.getElementById('stat-streak').textContent = p.currentStreak || 0;
+      document.getElementById('stat-sessions').textContent = p.totalSessions || 0;
+      const total = (p.totalCorrect || 0) + (p.totalIncorrect || 0);
+      const acc = total > 0 ? Math.round((p.totalCorrect / total) * 100) : 0;
+      document.getElementById('stat-accuracy').textContent = acc + '%';
+    } catch {
+      // stats not critical
+    }
+  }
+
+  // --- Quiz length selector ---
   document.querySelectorAll('.length-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.length-btn').forEach(b => b.classList.remove('active'));
@@ -43,15 +124,19 @@
     });
   });
 
-  // Start quiz buttons
+  // --- Start quiz ---
   document.querySelectorAll('[data-mode]').forEach(btn => {
     btn.addEventListener('click', () => {
+      isReviewMode = false;
+      isSRSMode = false;
       lastMode = btn.dataset.mode;
       startQuiz(lastMode, selectedLength);
     });
   });
 
   function startQuiz(mode, length, customPool) {
+    sessionCorrect = 0;
+    sessionIncorrect = 0;
     Quiz.init(mode, length, customPool);
     showScreen('quiz');
     renderQuestion();
@@ -69,40 +154,35 @@
     explanation.classList.add('hidden');
     hint.textContent = `${Quiz.getCurrentNumber()} / ${Quiz.getTotal()}`;
 
-    // Set prompt style
     const isKanji = Quiz.getMode().startsWith('kanji');
     prompt.className = 'quiz-prompt ' + (isKanji ? 'kanji-prompt' : 'grammar-prompt');
     prompt.textContent = q.prompt;
 
-    // Score
     scoreCorrect.textContent = Quiz.getScore();
     scoreTotal.textContent = Quiz.getCurrentNumber() - 1;
 
-    // Options
     answerBtns.forEach((btn, i) => {
-      btn.textContent = q.options[i].text;
       btn.className = 'answer-btn';
-      // Add keyboard hint
-      const keyHint = document.createElement('span');
-      keyHint.className = 'key-hint';
-      keyHint.textContent = i + 1;
-      btn.prepend(keyHint);
-      btn.prepend(document.createTextNode(' '));
-      // Reorder: key hint first
       btn.innerHTML = `<span class="key-hint">${i + 1}</span> ${q.options[i].text}`;
     });
   }
 
-  function handleAnswer(index) {
+  async function handleAnswer(index) {
     if (answered) return;
     answered = true;
 
     const result = Quiz.answer(index);
-
-    // Record progress
     const type = Progress.getType(Quiz.getMode());
     const key = type === 'kanji' ? result.item.kanji : result.item.japanese;
-    Progress.recordAnswer(type, key, result.isCorrect);
+
+    if (result.isCorrect) sessionCorrect++;
+    else sessionIncorrect++;
+
+    try {
+      await Progress.recordAnswer(type, key, result.isCorrect);
+    } catch {
+      showToast('Failed to save progress');
+    }
 
     answerBtns.forEach(b => b.classList.add('answered'));
     answerBtns[index].classList.add(result.isCorrect ? 'correct' : 'incorrect');
@@ -191,13 +271,14 @@
   });
 
   // Quit
-  btnQuit.addEventListener('click', () => {
+  btnQuit.addEventListener('click', async () => {
     showScreen('home');
-    renderProgress();
+    await renderProgress();
+    await renderStats();
   });
 
   // Results
-  function showResults() {
+  async function showResults() {
     showScreen('results');
     const score = Quiz.getScore();
     const total = Quiz.getTotal();
@@ -218,54 +299,99 @@
       });
       resultsMissed.innerHTML = html;
     }
+
+    // Update session stats
+    try {
+      await Progress.updateStats(sessionCorrect, sessionIncorrect);
+    } catch {
+      showToast('Failed to update stats');
+    }
   }
 
   // Retry & Menu
   btnRetry.addEventListener('click', () => {
-    if (isReviewMode) {
+    if (isSRSMode) {
+      startSRSReview(lastMode);
+    } else if (isReviewMode) {
       startReviewQuiz(lastMode);
     } else {
       startQuiz(lastMode, selectedLength);
     }
   });
-  btnMenu.addEventListener('click', () => {
+  btnMenu.addEventListener('click', async () => {
     showScreen('home');
-    renderProgress();
+    await renderProgress();
+    await renderStats();
   });
 
   // Progress rendering
-  function renderProgress() {
-    ['kanji', 'grammar'].forEach(type => {
-      const stats = Progress.getStats(type);
-      const bar = document.getElementById(`progress-bar-${type}`);
-      const text = document.getElementById(`progress-text-${type}`);
-      if (bar && text) {
-        const pct = stats.total > 0 ? (stats.learned / stats.total) * 100 : 0;
-        bar.style.width = pct + '%';
-        text.textContent = `${stats.learned} / ${stats.total} learned`;
+  async function renderProgress() {
+    for (const type of ['kanji', 'grammar']) {
+      try {
+        const stats = await Progress.getStats(type);
+        const bar = document.getElementById(`progress-bar-${type}`);
+        const text = document.getElementById(`progress-text-${type}`);
+        if (bar && text) {
+          const pct = stats.total > 0 ? (stats.learned / stats.total) * 100 : 0;
+          bar.style.width = pct + '%';
+          text.textContent = `${stats.learned} / ${stats.total} learned`;
+        }
+      } catch {
+        // non-critical
       }
-    });
+    }
   }
 
-  // Review mode
-  function startReviewQuiz(mode) {
+  // Review mode (weak + unseen)
+  async function startReviewQuiz(mode) {
     const type = Progress.getType(mode);
-    const weakKeys = Progress.getWeakItems(type);
-    const unseenKeys = Progress.getUnseenItems(type);
-    const reviewKeys = new Set([...weakKeys, ...unseenKeys]);
+    try {
+      const [weakKeys, unseenKeys] = await Promise.all([
+        Progress.getWeakItems(type),
+        Progress.getUnseenItems(type)
+      ]);
+      const reviewKeys = new Set([...weakKeys, ...unseenKeys]);
 
-    const dataset = type === 'kanji' ? KANJI_N2 : GRAMMAR_N2;
-    const keyProp = type === 'kanji' ? 'kanji' : 'japanese';
-    const customPool = dataset.filter(item => reviewKeys.has(item[keyProp]));
+      const dataset = type === 'kanji' ? KANJI_N2 : GRAMMAR_N2;
+      const keyProp = type === 'kanji' ? 'kanji' : 'japanese';
+      const customPool = dataset.filter(item => reviewKeys.has(item[keyProp]));
 
-    if (customPool.length === 0) {
-      alert('All items learned! Nothing to review.');
-      return;
+      if (customPool.length === 0) {
+        showToast('All items learned! Nothing to review.');
+        return;
+      }
+
+      isReviewMode = true;
+      isSRSMode = false;
+      lastMode = mode;
+      startQuiz(mode, selectedLength, customPool);
+    } catch {
+      showToast('Failed to load review items');
     }
+  }
 
-    isReviewMode = true;
-    lastMode = mode;
-    startQuiz(mode, selectedLength, customPool);
+  // SRS review mode (due items)
+  async function startSRSReview(mode) {
+    const type = Progress.getType(mode);
+    try {
+      const dueKeys = await Progress.getDueItems(type);
+
+      const dataset = type === 'kanji' ? KANJI_N2 : GRAMMAR_N2;
+      const keyProp = type === 'kanji' ? 'kanji' : 'japanese';
+      const customPool = dataset.filter(item => dueKeys.includes(item[keyProp]));
+
+      if (customPool.length === 0) {
+        showToast('No items due for review!');
+        return;
+      }
+
+      isSRSMode = true;
+      isReviewMode = false;
+      lastMode = mode;
+      startQuiz(mode, selectedLength, customPool);
+    } catch {
+      showToast('Failed to load SRS items');
+    }
   }
 
   // Review button listeners
@@ -275,24 +401,27 @@
     });
   });
 
-  // Regular quiz buttons should clear review mode
-  document.querySelectorAll('[data-mode]').forEach(btn => {
+  // SRS button listeners
+  document.querySelectorAll('[data-srs]').forEach(btn => {
     btn.addEventListener('click', () => {
-      isReviewMode = false;
+      startSRSReview(btn.dataset.srs);
     });
   });
 
   // Reset button
   const btnReset = document.getElementById('btn-reset');
   if (btnReset) {
-    btnReset.addEventListener('click', () => {
+    btnReset.addEventListener('click', async () => {
       if (confirm('Reset all progress? This cannot be undone.')) {
-        Progress.reset();
-        renderProgress();
+        try {
+          await Progress.reset();
+          await renderProgress();
+          await renderStats();
+          showToast('Progress reset');
+        } catch {
+          showToast('Failed to reset progress');
+        }
       }
     });
   }
-
-  // Initial render
-  renderProgress();
 })();
