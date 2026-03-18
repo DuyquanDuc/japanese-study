@@ -36,8 +36,32 @@
 
   // --- Utilities ---
   function showScreen(name) {
-    Object.values(screens).forEach(s => s.classList.remove('active'));
-    screens[name].classList.add('active');
+    const current = Object.values(screens).find(s => s.classList.contains('active'));
+    const next = screens[name];
+    if (current && current !== next) {
+      current.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+      current.style.opacity = '0';
+      current.style.transform = 'translateY(-8px)';
+      setTimeout(() => {
+        current.classList.remove('active');
+        current.style.transition = '';
+        current.style.opacity = '';
+        current.style.transform = '';
+        next.classList.add('active');
+        // Trigger reflow then fade in
+        void next.offsetWidth;
+        next.style.opacity = '0';
+        next.style.transform = 'translateY(8px)';
+        next.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+        requestAnimationFrame(() => {
+          next.style.opacity = '1';
+          next.style.transform = 'translateY(0)';
+        });
+      }, 200);
+    } else {
+      Object.values(screens).forEach(s => s.classList.remove('active'));
+      next.classList.add('active');
+    }
   }
 
   function showLoading() { loadingOverlay.classList.remove('hidden'); }
@@ -186,9 +210,18 @@
     scoreCorrect.textContent = Quiz.getScore();
     scoreTotal.textContent = Quiz.getCurrentNumber() - 1;
 
+    // Re-trigger prompt animation
+    prompt.style.animation = 'none';
+    void prompt.offsetWidth;
+    prompt.style.animation = '';
+
     answerBtns.forEach((btn, i) => {
       btn.className = 'answer-btn';
       btn.innerHTML = `<span class="key-hint">${i + 1}</span> ${q.options[i].text}`;
+      // Re-trigger staggered answer animation
+      btn.style.animation = 'none';
+      void btn.offsetWidth;
+      btn.style.animation = '';
     });
   }
 
