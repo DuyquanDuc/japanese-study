@@ -73,10 +73,12 @@
     showScreen('login');
   });
 
-  Auth.onReady(async (user) => {
+  Auth.onAuthStateChanged(async (user) => {
     if (user) {
+      loginSpinner.classList.add('hidden');
       showLoading();
       try {
+        Progress.clearCache();
         await Progress.loadAll();
         populateUserBar(user);
         await renderStats();

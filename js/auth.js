@@ -3,17 +3,15 @@
  */
 const Auth = (() => {
   let currentUser = null;
-  const readyCallbacks = [];
-  let resolved = false;
+  const listeners = [];
+  let initialResolved = false;
 
   const provider = new firebase.auth.GoogleAuthProvider();
 
   window.auth.onAuthStateChanged(user => {
     currentUser = user;
-    if (!resolved) {
-      resolved = true;
-      readyCallbacks.forEach(cb => cb(user));
-    }
+    initialResolved = true;
+    listeners.forEach(cb => cb(user));
   });
 
   function signIn() {
@@ -24,11 +22,10 @@ const Auth = (() => {
     return window.auth.signOut();
   }
 
-  function onReady(callback) {
-    if (resolved) {
+  function onAuthStateChanged(callback) {
+    listeners.push(callback);
+    if (initialResolved) {
       callback(currentUser);
-    } else {
-      readyCallbacks.push(callback);
     }
   }
 
@@ -40,5 +37,5 @@ const Auth = (() => {
     return currentUser;
   }
 
-  return { signIn, signOut, onReady, getUid, getUser };
+  return { signIn, signOut, onAuthStateChanged, getUid, getUser };
 })();
