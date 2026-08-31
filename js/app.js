@@ -85,7 +85,8 @@
     try {
       await Auth.signIn();
     } catch (err) {
-      loginError.textContent = 'Sign-in failed. Please try again.';
+      console.error('[signIn] failed:', err && err.code, err && err.message, err);
+      loginError.textContent = 'Sign-in failed (' + ((err && err.code) || 'unknown') + '). Please try again.';
       loginError.classList.remove('hidden');
       loginSpinner.classList.add('hidden');
     }
