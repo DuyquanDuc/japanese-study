@@ -1,13 +1,35 @@
 /**
- * Progress persistence — Firestore-backed with in-memory cache and SRS integration.
+ * Progress persistence — localStorage-backed with in-memory cache and SRS integration.
  * Types are level-qualified: "n2-kanji", "n1-grammar", etc.
  */
 const Progress = (() => {
   const LEARNED_THRESHOLD = 2;
   const ALL_TYPES = ['n1-kanji', 'n1-grammar', 'n2-kanji', 'n2-grammar', 'n3-kanji', 'n3-grammar'];
+  const KEY_PREFIX = 'jlpt:progress:';
+  const PROFILE_KEY = 'jlpt:profile';
+
   let cache = {};
   let profile = null;
   let loaded = false;
+
+  // Private browsing and locked-down storage settings can make localStorage throw
+  // on access. Fall back to memory-only so a session still works, just unsaved.
+  function read(key) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function write(key, value) {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // memory-only for this session
+    }
+  }
 
   function initCache() {
     cache = {};
@@ -15,71 +37,8 @@ const Progress = (() => {
   }
   initCache();
 
-  function userDoc() {
-    return window.db.collection('users').doc(Auth.getUid());
-  }
-
-  function progressDoc(type) {
-    return userDoc().collection('progress').doc(type);
-  }
-
-  async function migrateOldData() {
-    // Migrate old "kanji" → "n2-kanji" and "grammar" → "n2-grammar"
-    const [oldKanjiSnap, oldGrammarSnap] = await Promise.all([
-      progressDoc('kanji').get(),
-      progressDoc('grammar').get()
-    ]);
-
-    const migrations = [];
-    if (oldKanjiSnap.exists && oldKanjiSnap.data().items && Object.keys(oldKanjiSnap.data().items).length > 0) {
-      cache['n2-kanji'] = oldKanjiSnap.data().items;
-      migrations.push(
-        progressDoc('n2-kanji').set({ items: cache['n2-kanji'] }, { merge: true }),
-        progressDoc('kanji').delete()
-      );
-    }
-    if (oldGrammarSnap.exists && oldGrammarSnap.data().items && Object.keys(oldGrammarSnap.data().items).length > 0) {
-      cache['n2-grammar'] = oldGrammarSnap.data().items;
-      migrations.push(
-        progressDoc('n2-grammar').set({ items: cache['n2-grammar'] }, { merge: true }),
-        progressDoc('grammar').delete()
-      );
-    }
-    if (migrations.length > 0) {
-      await Promise.all(migrations);
-    }
-  }
-
-  async function loadAll() {
-    if (loaded) return;
-    const uid = Auth.getUid();
-    if (!uid) return;
-
-    // Try migration first
-    await migrateOldData();
-
-    // Load all level-qualified progress docs + profile
-    const promises = ALL_TYPES.map(t => progressDoc(t).get());
-    promises.push(userDoc().get());
-
-    const results = await Promise.all(promises);
-    const profileSnap = results[results.length - 1];
-
-    ALL_TYPES.forEach((t, i) => {
-      const snap = results[i];
-      cache[t] = (snap.exists && snap.data().items) || {};
-    });
-
-    profile = profileSnap.exists ? profileSnap.data() : defaultProfile();
-    loaded = true;
-  }
-
   function defaultProfile() {
-    const user = Auth.getUser();
     return {
-      displayName: user ? user.displayName : '',
-      email: user ? user.email : '',
-      photoURL: user ? user.photoURL : '',
       createdAt: Date.now(),
       lastStudyDate: null,
       currentStreak: 0,
@@ -90,10 +49,14 @@ const Progress = (() => {
     };
   }
 
-  function clearCache() {
-    initCache();
-    profile = null;
-    loaded = false;
+  async function loadAll() {
+    if (loaded) return;
+    ALL_TYPES.forEach(t => {
+      const stored = read(KEY_PREFIX + t);
+      cache[t] = (stored && stored.items) || {};
+    });
+    profile = read(PROFILE_KEY) || defaultProfile();
+    loaded = true;
   }
 
   function getType(mode) {
@@ -121,8 +84,7 @@ const Progress = (() => {
     entry.nextReview = srsResult.nextReview;
     entry.repetitions = srsResult.repetitions;
 
-    // Write-through to Firestore
-    progressDoc(type).set({ items: cache[type] }, { merge: true });
+    write(KEY_PREFIX + type, { items: cache[type] });
   }
 
   function getAllKeys(type) {
@@ -159,8 +121,7 @@ const Progress = (() => {
   async function getWeakItems(type) {
     await loadAll();
     const store = cache[type] || {};
-    const allKeys = getAllKeys(type);
-    return allKeys.filter(key => {
+    return getAllKeys(type).filter(key => {
       const entry = store[key];
       return entry && entry.incorrect > 0 && entry.correct < LEARNED_THRESHOLD;
     });
@@ -169,15 +130,13 @@ const Progress = (() => {
   async function getUnseenItems(type) {
     await loadAll();
     const store = cache[type] || {};
-    const allKeys = getAllKeys(type);
-    return allKeys.filter(key => !store[key]);
+    return getAllKeys(type).filter(key => !store[key]);
   }
 
   async function getDueItems(type) {
     await loadAll();
     const store = cache[type] || {};
-    const allKeys = getAllKeys(type);
-    return allKeys.filter(key => {
+    return getAllKeys(type).filter(key => {
       const entry = store[key];
       if (!entry) return true; // unseen items are due
       return SRS.isDue(entry);
@@ -205,7 +164,7 @@ const Progress = (() => {
     }
     profile.longestStreak = Math.max(profile.longestStreak, profile.currentStreak);
 
-    userDoc().set(profile, { merge: true });
+    write(PROFILE_KEY, profile);
   }
 
   async function getProfile() {
@@ -217,17 +176,13 @@ const Progress = (() => {
     initCache();
     profile = defaultProfile();
     loaded = true;
-    const promises = ALL_TYPES.map(t => progressDoc(t).set({ items: {} }));
-    promises.push(userDoc().set(profile));
-    // Also clean up old format docs if they exist
-    promises.push(progressDoc('kanji').delete().catch(() => {}));
-    promises.push(progressDoc('grammar').delete().catch(() => {}));
-    await Promise.all(promises);
+    ALL_TYPES.forEach(t => write(KEY_PREFIX + t, { items: {} }));
+    write(PROFILE_KEY, profile);
   }
 
   return {
     recordAnswer, getStats, getWeakItems, getUnseenItems, getType,
-    getDueItems, updateStats, getProfile, reset, loadAll, clearCache,
+    getDueItems, updateStats, getProfile, reset, loadAll,
     ALL_TYPES
   };
 })();

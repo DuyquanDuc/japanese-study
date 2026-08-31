@@ -122,34 +122,7 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ===== Login Screen ===== */
-#screen-login {
-  justify-content: center;
-  min-height: 80vh;
-  position: relative;
-  overflow: hidden;
-}
-
-.login-watermark {
-  position: absolute;
-  font-family: var(--font-display);
-  font-size: clamp(200px, 40vw, 360px);
-  color: rgba(28, 28, 28, 0.04);
-  user-select: none;
-  pointer-events: none;
-  line-height: 1;
-  z-index: 0;
-}
-
-.login-content {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-lg);
-}
-
+/* ===== Masthead ===== */
 .app-title {
   font-family: var(--font-display);
   font-size: 2.4rem;
@@ -163,78 +136,6 @@ body {
   color: var(--stone);
   font-size: 1.1rem;
   margin-top: -12px;
-}
-
-.google-signin-btn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--surface);
-  color: var(--ink);
-  border: 1.5px solid rgba(28, 28, 28, 0.12);
-  border-radius: 8px;
-  padding: 12px 24px;
-  font-size: 1rem;
-  font-family: var(--font-body);
-  cursor: pointer;
-  transition: box-shadow 0.2s var(--ease-out), transform 0.15s var(--ease-out);
-  box-shadow: var(--shadow-card);
-}
-
-.google-signin-btn:hover {
-  box-shadow: var(--shadow-hover);
-  transform: translateY(-1px);
-}
-
-.login-error {
-  color: var(--incorrect);
-  font-size: 0.9rem;
-}
-
-/* ===== User Info Bar ===== */
-.user-info-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 16px;
-  background: var(--surface);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
-}
-
-.user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.user-name {
-  font-size: 0.9rem;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ink);
-}
-
-.btn-signout {
-  background: none;
-  border: 1px solid var(--stone);
-  color: var(--stone);
-  border-radius: 6px;
-  padding: 4px 12px;
-  font-size: 0.8rem;
-  font-family: var(--font-body);
-  cursor: pointer;
-  transition: all 0.2s;
-  flex-shrink: 0;
-}
-
-.btn-signout:hover {
-  border-color: var(--vermillion);
-  color: var(--vermillion);
 }
 
 /* ===== Stats ===== */

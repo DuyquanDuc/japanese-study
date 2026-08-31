@@ -1,10 +1,9 @@
 /**
  * App shell — screen navigation, event listeners, rendering.
- * Gated on Firebase Auth; all Progress calls are async.
+ * Progress lives in localStorage; all Progress calls are async.
  */
 (() => {
   const screens = {
-    login: document.getElementById('screen-login'),
     home: document.getElementById('screen-home'),
     quiz: document.getElementById('screen-quiz'),
     results: document.getElementById('screen-results')
@@ -73,58 +72,18 @@
     setTimeout(() => toast.classList.add('hidden'), duration || 3000);
   }
 
-  // --- Auth ---
-  const btnSignIn = document.getElementById('btn-google-signin');
-  const btnSignOut = document.getElementById('btn-signout');
-  const loginSpinner = document.getElementById('login-spinner');
-  const loginError = document.getElementById('login-error');
-
-  btnSignIn.addEventListener('click', async () => {
-    loginSpinner.classList.remove('hidden');
-    loginError.classList.add('hidden');
+  // --- Boot ---
+  async function init() {
+    showLoading();
     try {
-      await Auth.signIn();
-    } catch (err) {
-      console.error('[signIn] failed:', err && err.code, err && err.message, err);
-      loginError.textContent = 'Sign-in failed (' + ((err && err.code) || 'unknown') + '). Please try again.';
-      loginError.classList.remove('hidden');
-      loginSpinner.classList.add('hidden');
+      await Progress.loadAll();
+      await renderStats();
+      await renderProgress();
+    } catch {
+      showToast('Failed to load saved progress.');
+    } finally {
+      hideLoading();
     }
-  });
-
-  btnSignOut.addEventListener('click', async () => {
-    Progress.clearCache();
-    await Auth.signOut();
-    showScreen('login');
-  });
-
-  Auth.onAuthStateChanged(async (user) => {
-    if (user) {
-      loginSpinner.classList.add('hidden');
-      showLoading();
-      try {
-        Progress.clearCache();
-        await Progress.loadAll();
-        populateUserBar(user);
-        await renderStats();
-        await renderProgress();
-        showScreen('home');
-      } catch (err) {
-        showToast('Failed to load data. Please refresh.');
-      } finally {
-        hideLoading();
-      }
-    } else {
-      showScreen('login');
-    }
-  });
-
-  function populateUserBar(user) {
-    const avatar = document.getElementById('user-avatar');
-    const name = document.getElementById('user-name');
-    avatar.src = user.photoURL || '';
-    avatar.style.display = user.photoURL ? 'block' : 'none';
-    name.textContent = user.displayName || user.email || '';
   }
 
   // --- Stats ---
@@ -479,4 +438,6 @@
       }
     });
   }
+
+  init();
 })();
